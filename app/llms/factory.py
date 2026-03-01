@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union, AsyncGenerator
-from app.logger import logger
+import logging
 from app.utils.common import get_project_base_directory
 from .base import LLM
 from .models import LLMInfo
@@ -10,7 +10,7 @@ from .openaillm import OpenAIStyleLLM
 from .anthropicllm import AnthropicStyleLLM
 from .siliconllm import SiliconStyleLLM
 
-_LLM_MODELS_JSON = Path(get_project_base_directory()) / "app" / "llm_models.json"
+_LLM_MODELS_JSON = Path(get_project_base_directory()) / "llm_models.json"
 
 def _load_llm_configs_from_json(path: Path) -> Dict[str, Dict[str, Any]]:
     """从 llm_models.json 加载并扁平化为 name -> config。"""
@@ -39,14 +39,16 @@ def _load_llm_configs_from_json(path: Path) -> Dict[str, Dict[str, Any]]:
             }
     return result
 
-def _load_default_llm_from_json(path: Path) -> Dict[str, Any]:
-    """从 llm_models.json 加载默认LLM配置"""
+def _load_default_llm_from_json(path: Path) -> tuple:
+    """从 llm_models.json 加载默认 LLM，返回 (provider, model_name)。"""
     if not path.is_file():
-        return {}
+        return "", ""
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    default = data.get("default", {})
-    return default.get("provider", ""), default.get("model_name", "")
+    default = data.get("default") or {}
+    provider = default.get("provider", "")
+    model_name = default.get("model", "") or default.get("model_name", "")
+    return provider, model_name
 
 class LLMFactory:
     """LLM工厂类"""
@@ -71,25 +73,30 @@ class LLMFactory:
         full_name = f"{provider}/{model_name}"
         if full_name not in self.llmconfigs:
             raise ValueError(f"未知的LLM: {provider}/{model_name}")
-        
+
         config = self.llmconfigs[full_name]
         api_style = config["api_style"]
-        
+
         if api_style not in self.API_STYLES:
             raise ValueError(f"不支持的API风格: {api_style}")
-            
+
         return config
 
-    def create_llm_instance(self, provider: str, model_name: str, kwargs: Dict[str, Any]) -> LLM:
+    def create_llm_instance(self, provider: str, model_name: str, *kwargs: Any) -> LLM:
         """创建LLM实例"""
-        if not provider or not model_name:
-            full_name = f"{self.default_provider}/{self.default_model_name}"
+        if not provider or not model_name or f"{provider}/{model_name}" not in self.llmconfigs:
+            if not self.default_provider or not self.default_model_name:
+                raise ValueError("未配置默认LLM")
+            active_provider = self.default_provider
+            active_model_name = self.default_model_name
         else:
-            full_name = f"{provider}/{model_name}"
-        
+            active_provider = provider
+            active_model_name = model_name
+
+        full_name = f"{active_provider}/{active_model_name}"
         if full_name not in self.llmconfigs:
             raise ValueError(f"未知的LLM: {full_name}")
-        
+
         config = self.llmconfigs[full_name]
         params = {
             "temperature": config["temperature"],
@@ -98,13 +105,13 @@ class LLMFactory:
         params.update(kwargs)
 
         return self.API_STYLES[config["api_style"]](
-            model_name=model_name,
+            model_name=active_model_name,
             model_type=config["api_style"],
             api_base=config["api_base"],
             api_key=config["api_key"],
             **params
         )
-    
+
     def get_supported_llms(self) -> List[LLMInfo]:
         """获取支持的模型列表"""
         llm_list = []
@@ -120,4 +127,4 @@ class LLMFactory:
 
 
 # 全局工厂实例
-llm_factory = LLMFactory() 
+llm_factory = LLMFactory()

@@ -2,56 +2,56 @@ from typing import Dict, Optional, List, Literal, Union, AsyncGenerator, Any
 import json
 import requests
 import httpx
-from app.logger import logger
+import logging
 from .base import LLM
 from .schemes import ChatResponse, AskToolResponse
 
- 
+
 class SiliconStyleLLM(LLM):
     """Silicon风格的API实现（如百川、智谱等）"""
-     
+
     def _initialize_model(self):
         """初始化模型客户端"""
         pass
- 
-    def _format_silicon_message(self, 
+
+    def _format_silicon_message(self,
                                system_prompt: str,
                                user_prompt: str,
                                user_question: str,
                                history: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """格式化 Silicon 风格的消息
-         
+
         Args:
             system_prompt: 系统提示词
             user_prompt: 用户提示词
             user_question: 用户问题
             history: 历史会话记录
-             
+
         Returns:
             List[Dict[str, str]]: 格式化后的消息列表
-             
+
         Note:
             Silicon 风格API通常使用类似OpenAI的消息格式，
             但可能有一些特殊字段要求
         """
         try:
             messages = [{"role": "system", "content": system_prompt}]
-            
+
             # 处理历史记录
             if history:
                 messages.extend(history)
-            
+
             # 合并用户提示和问题
             user_message = f"{user_prompt}\n{user_question}" if user_prompt else user_question
             messages.append({"role": "user", "content": user_message})
-         
+
             return messages
         except Exception as e:
-            logger.error(f"Error in _format_silicon_message: {e}")
+            logging.error(f"Error in _format_silicon_message: {e}")
             raise e
- 
- 
-    async def chat(self, 
+
+
+    async def chat(self,
                    system_prompt: str,
                    user_prompt: str,
                    user_question: str,
@@ -63,13 +63,13 @@ class SiliconStyleLLM(LLM):
             message = self._format_silicon_message(
                 system_prompt, user_prompt, user_question, history
             )
-            
+
             payload = {
                 "model": self.model_name,
                 "messages": message,
                 "stream": stream,
-                "temperature": self.model_params.get("temperature", 0.7),
-                "max_tokens": self.model_params.get("max_tokens", 2048),
+                "temperature": self.configs.get("temperature", 0.7),
+                "max_tokens": self.configs.get("max_tokens", 2048),
                 "stop": ["null"],
                 "top_p": 0.7,
                 "top_k": 50,
@@ -102,7 +102,7 @@ class SiliconStyleLLM(LLM):
                                         except json.JSONDecodeError:
                                             continue
                     except Exception as e:
-                        logger.error(f"Error in stream response: {e}")
+                        logging.error(f"Error in stream response: {e}")
                         if response:
                             await response.aclose()
                         raise
@@ -124,9 +124,9 @@ class SiliconStyleLLM(LLM):
                         success=False
                     )
         except Exception as e:
-            logger.error(f"Error in chat: {e}")
+            logging.error(f"Error in chat: {e}")
             raise e
- 
+
     async def ask_tools(self,
                         system_prompt: str,
                         user_prompt: str,
@@ -137,7 +137,7 @@ class SiliconStyleLLM(LLM):
                         tool_choice: Literal["none", "auto", "required"] = "auto",
                         **kwargs) -> Union[AsyncGenerator[Union[str, AskToolResponse], None], AskToolResponse]:
         """Silicon风格的工具调用实现
-         
+
         Note:
             工具格式示例:
             tools = [{
@@ -154,7 +154,7 @@ class SiliconStyleLLM(LLM):
                     "required": ["query"]
                 }
             }]
-             
+
             返回格式示例:
             {
                 "tool_name": "search",
@@ -165,17 +165,17 @@ class SiliconStyleLLM(LLM):
         try:
             if tool_choice == "required" and not tools:
                 raise ValueError("tool_choice 为 'required' 时必须提供 tools")
-            
+
             message = self._format_silicon_message(
                 system_prompt, user_prompt, user_question, history
             )
-            
+
             payload = {
                 "model": self.model_name,
                 "messages": message,
                 "stream": stream,
-                "temperature": self.model_params.get("temperature", 0.7),
-                "max_tokens": self.model_params.get("max_tokens", 2048),
+                "temperature": self.configs.get("temperature", 0.7),
+                "max_tokens": self.configs.get("max_tokens", 2048),
                 "stop": ["null"],
                 "top_p": 0.7,
                 "top_k": 50,
@@ -184,7 +184,7 @@ class SiliconStyleLLM(LLM):
                 "response_format": {"type": "text"},
                 **kwargs
              }
-            
+
             if tools:
                 payload["tools"] = tools
                 payload["tool_choice"] = tool_choice
@@ -231,7 +231,7 @@ class SiliconStyleLLM(LLM):
                                     success=True
                                 )
                     except Exception as e:
-                        logger.error(f"Error in stream response: {e}")
+                        logging.error(f"Error in stream response: {e}")
                         if response:
                             await response.aclose()
                         raise
@@ -256,5 +256,5 @@ class SiliconStyleLLM(LLM):
                     success=True
                 )
         except Exception as e:
-            logger.error(f"Error in ask_tools: {e}")
+            logging.error(f"Error in ask_tools: {e}")
             raise e

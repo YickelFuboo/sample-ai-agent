@@ -1,33 +1,33 @@
 from typing import Dict, Optional, List, Literal, Union, AsyncGenerator, Any
 import json
 from anthropic import AsyncAnthropic
-from app.logger import logger
+import logging
 from .base import LLM
 from .schemes import ChatResponse, AskToolResponse
 
 
 class AnthropicStyleLLM(LLM):
     """Anthropic风格的API实现"""
-    
+
     def _initialize_model(self):
         self.client = AsyncAnthropic(api_key=self.api_key)
 
-    def _format_anthropic_prompt(self, 
+    def _format_anthropic_prompt(self,
                                system_prompt: str,
                                user_prompt: str,
                                user_question: str,
                                history: List[Dict[str, Any]] = None) -> str:
         """格式化 Anthropic 风格的提示词
-        
+
         Args:
             system_prompt: 系统提示词
             user_prompt: 用户提示词
             user_question: 用户问题
             history: 历史会话记录
-            
+
         Returns:
             str: 格式化后的 Anthropic 格式消息
-            
+
         Note:
             Anthropic 的消息格式要求:
             1. 必须以 "Human:" 开头
@@ -37,17 +37,17 @@ class AnthropicStyleLLM(LLM):
         try:
             # 构建第一条消息，包含系统提示和首次用户输入
             messages = []
-            
+
             # 第一条消息包含系统提示
             first_message = f"{system_prompt}\n\n作为 AI 助手，请按照以上要求回答我的问题。"
             messages.append(f"Human: {first_message}")
             messages.append("Assistant: 好的，我会按照要求为您提供帮助。")
-            
+
             # 添加历史记录
             if history:
                 for msg in history:
                     prefix = "Human: " if msg["role"] == "user" else "Assistant: "
-                    messages.append(f"{prefix}{msg["content"]}")
+                    messages.append(f"{prefix}{msg['content']}")
                     if msg["tool_calls"]:
                         messages.append({
                             "role": "tool",
@@ -67,14 +67,14 @@ class AnthropicStyleLLM(LLM):
             current_question = f"{user_prompt}\n{user_question}" if user_prompt else user_question
             messages.append(f"Human: {current_question}")
             messages.append("Assistant:")  # Anthropic 要求以 Assistant: 结尾
-            
+
             # 用换行符连接所有消息
             return "\n\n".join(messages)
         except Exception as e:
-            logger.error(f"Error in _format_anthropic_prompt: {e}")
+            logging.error(f"Error in _format_anthropic_prompt: {e}")
             raise e
 
-    async def chat(self, 
+    async def chat(self,
                   system_prompt: str,
                   user_prompt: str,
                   user_question: str,
@@ -89,8 +89,8 @@ class AnthropicStyleLLM(LLM):
 
             params = {
                 "model": self.model_name,
-                "max_tokens": self.model_params.get("max_tokens", 2048),
-                "temperature": self.model_params.get("temperature", 0.7),
+                "max_tokens": self.configs.get("max_tokens", 2048),
+                "temperature": self.configs.get("temperature", 0.7),
                 "stream": stream,
                 **kwargs
             }
@@ -106,7 +106,7 @@ class AnthropicStyleLLM(LLM):
                             if chunk.content:
                                 yield chunk.content
                     except Exception as e:
-                        logger.error(f"Error in stream response: {e}")
+                        logging.error(f"Error in stream response: {e}")
                         if response and hasattr(response, 'close'):
                             await response.close()
                         raise
@@ -122,7 +122,7 @@ class AnthropicStyleLLM(LLM):
             )
 
         except Exception as e:
-            logger.error(f"Error in chat: {e}")
+            logging.error(f"Error in chat: {e}")
             raise e
 
     async def ask_tools(self,
@@ -135,7 +135,7 @@ class AnthropicStyleLLM(LLM):
                        tool_choice: Literal["none", "auto", "required"] = "auto",
                        **kwargs) -> Union[AsyncGenerator[Union[str, AskToolResponse], None], AskToolResponse]:
         """Anthropic风格的工具调用实现
-        
+
         Note:
             工具格式示例:
             tools = [{
@@ -152,7 +152,7 @@ class AnthropicStyleLLM(LLM):
                     "required": ["query"]
                 }
             }]
-            
+
             返回格式示例:
             {
                 "tool_name": "search",
@@ -167,8 +167,8 @@ class AnthropicStyleLLM(LLM):
 
             params = {
                 "model": self.model_name,
-                "max_tokens": self.model_params.get("max_tokens", 2048),
-                "temperature": self.model_params.get("temperature", 0.7),
+                "max_tokens": self.configs.get("max_tokens", 2048),
+                "temperature": self.configs.get("temperature", 0.7),
                 "stream": stream,
                 **kwargs
             }
@@ -189,13 +189,13 @@ class AnthropicStyleLLM(LLM):
                             if chunk.content:
                                 collected_content.append(chunk.content)
                                 yield chunk.content
-                        
+
                         # 处理完整响应
                         full_content = "".join(collected_content)
                         try:
                             result = json.loads(full_content)
                             if isinstance(result, dict) and "tool_name" in result:
-                                yield AskToolResponse(                                
+                                yield AskToolResponse(
                                     content=result.get("thought"),
                                     tool_name=result["tool_name"],
                                     tool_args=result["tool_args"],
@@ -204,13 +204,13 @@ class AnthropicStyleLLM(LLM):
                                 return
                         except json.JSONDecodeError:
                             pass
-                        
+
                         yield AskToolResponse(
                             content=full_content,
                             success=True
                         )
                     except Exception as e:
-                        logger.error(f"Error in stream response: {e}")
+                        logging.error(f"Error in stream response: {e}")
                         if response and hasattr(response, 'close'):
                             await response.close()
                         raise
@@ -235,12 +235,12 @@ class AnthropicStyleLLM(LLM):
                     )
             except json.JSONDecodeError:
                 pass
-            
+
             return AskToolResponse(
                 content=content,
                 success=True
             )
 
         except Exception as e:
-            logger.error(f"Error in ask_tools: {e}")
+            logging.error(f"Error in ask_tools: {e}")
             raise e

@@ -5,7 +5,7 @@ from .schemes import ChatResponse, AskToolResponse
 
 class LLM(ABC):
     """LLM基础抽象类"""
-    def __init__(self, 
+    def __init__(self,
                  model_name: str,
                  model_type: str,
                  api_base: str,
@@ -15,7 +15,7 @@ class LLM(ABC):
         self.model_type = model_type
         self.api_base = api_base
         self.api_key = api_key
-        self.model_params = kwargs
+        self.configs = kwargs
         self._initialize_model()
 
     @abstractmethod
@@ -23,7 +23,7 @@ class LLM(ABC):
         """初始化模型，包括设置 max_tokens"""
         pass
     @abstractmethod
-    async def chat(self, 
+    async def chat(self,
                   system_prompt: str,
                   user_prompt: str,
                   user_question: str,

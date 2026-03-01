@@ -43,6 +43,8 @@ class BaseAgent(ABC):
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
         model_id: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
@@ -67,8 +69,8 @@ class BaseAgent(ABC):
         self.next_step_prompt = next_step_prompt or "Please continue your work."
 
         # 模型信息
-        #self.llm_provider = llm_provider or ""
-        #self.llm_model = llm_model or ""
+        self.llm_provider = llm_provider or ""
+        self.llm_model = llm_model or ""
         self.model_id = model_id or ""
         self.temperature = temperature or 0.7
         self.max_tokens = max_tokens or 4096
@@ -83,7 +85,7 @@ class BaseAgent(ABC):
 
     def reset(self):
         """重置 agent 状态到初始状态
-        
+
         重置以下内容：
         - 状态设置为 IDLE
         - 当前步数归零
@@ -98,15 +100,15 @@ class BaseAgent(ABC):
 
     async def run(self, question: str) -> Tuple[str, List[tool_result]]:
         """Run the agent
-        
+
         Args:
             question: Input question
-            
+
         Returns:
             Tuple[str, List[tool_result]]: Execution result and tool results
         """
         raise NotImplementedError("Subclasses must implement this method")
- 
+
     def handle_stuck_state(self):
         """Handle stuck state by adding a prompt to change strategy"""
         stuck_prompt = "\
@@ -135,7 +137,7 @@ class BaseAgent(ABC):
 
     def get_state(self) -> AgentState:
         """Get current state
-        
+
         Returns:
             AgentState: Current state
         """

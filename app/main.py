@@ -109,7 +109,7 @@ async def health_check():
         }
 
         return health_status
-        
+
     except Exception as e:
         logging.error(f"健康检查失败: {e}")
         raise HTTPException(status_code=500, detail="服务不健康")
@@ -155,4 +155,4 @@ def main():
     )
 
 if __name__ == "__main__":
-    main() 
+    main()

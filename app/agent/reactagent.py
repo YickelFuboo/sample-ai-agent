@@ -38,6 +38,8 @@ class ReActAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         next_step_prompt: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
         model_id: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
@@ -107,31 +109,31 @@ class ReActAgent(BaseAgent):
 
     async def run(self, question: str) -> Tuple[str, List[tool_result]]:
         """Run the agent
-        
+
         Args:
             question: Input question
-            
+
         Returns:
             Tuple[str, List[tool_result]]: Execution result and tool results
-        """        
+        """
         logging.info(f"Running agent {self.agent_name} with question: {question}")
 
         if not self.session_id or not self.workspace_index:
             raise ValueError("Session ID and workspace_index are required")
-        
+
         # 检查并重置状态
         if self.state != AgentState.IDLE:
             logging.warning(f"Agent is busy with state {self.state}, resetting...")
             self.reset()
-        
-        try:
-            # 更新历史记录
-            await self.push_history_message(self.session_id, Message.user_message(question))
 
+        try:
             # 设置运行状态
             self.state = AgentState.RUNNING
             logging.info(f"Agent state set to RUNNING")
-            
+
+            # 设置添加用户消息到history标志
+            had_push_user_message = False
+
             while (self.current_step < self.max_steps and self.state != AgentState.FINISHED):
                 self.current_step += 1
                 logging.info(f"Executing step {self.current_step}/{self.max_steps}")
@@ -139,10 +141,16 @@ class ReActAgent(BaseAgent):
                 # 模型思考和工具调度
                 content, tool_calls = await self.think(question)
                 if not tool_calls or self._has_special_tool(tool_calls):
+                    if not had_push_user_message:
+                        await self.push_history_message(self.session_id, Message.user_message(question))
+                        had_push_user_message = True
                     await self.push_history_message(self.session_id, Message.assistant_message(content))
                     break
                 else:
-                    await self.push_history_message(self.session_id, Message.tool_call_message(content, tool_calls))    
+                    if not had_push_user_message:
+                        await self.push_history_message(self.session_id, Message.user_message(question))
+                        had_push_user_message = True
+                    await self.push_history_message(self.session_id, Message.tool_call_message(content, tool_calls))
                     await self.act(tool_calls)
 
                 # 检查模型是否进行死循环
@@ -155,22 +163,22 @@ class ReActAgent(BaseAgent):
             # 检查终止原因并重置状态
             if self.current_step >= self.max_steps:
                 content += f"\n\n Terminated: Reached max steps ({self.max_steps})"
-     
+
             # 统一重置状态
-            self.reset()
+            # self.reset()
             return content, self.tool_results
-            
+
         except Exception as e:
             # 发生错误时设置错误状态
             self.state = AgentState.ERROR
-            await self.push_history_message_and_notify_user(self.session_id, Message.assistant_message(f"Error in agent execution: {str(e)}"))
-            raise e
+            await self.push_history_message(self.session_id, Message.assistant_message(f"Error in agent execution: {str(e)}"))
+            return str(e), self.tool_results
 
     async def think(self, question: str) -> Tuple[str, bool]:
         """Think about the question"""
         # 获取当前会话历史
         history = await self.get_history_context(self.session_id)
-        llm = llm_factory.create_llm_instance(self.provider, self.model_name)
+        llm = llm_factory.create_llm_instance(self.llm_provider, self.llm_model)
 
         response = None
         tool_calls = []
@@ -198,7 +206,7 @@ class ReActAgent(BaseAgent):
                     temperature=self.temperature,
                     max_tokens=self.max_tokens
                 )
-                
+
                 # 处理工具调用
                 if response.tool_calls:
                     # 处理工具调用列表
@@ -231,18 +239,18 @@ class ReActAgent(BaseAgent):
             for toolcall in tool_calls:
                 # 执行工具
                 result = await self.execute_tool(toolcall)
-                # 记录工具执行历史  
+                # 记录工具执行历史
                 await self.push_history_message(self.session_id, Message.tool_result_message(
                     result.result, toolcall.function.name, toolcall.id)
                 )
                 # 记录工具执行结果，用于返回用户
                 self.tool_results.append(tool_result(
                     name=toolcall.function.name,
-                    success=result.status == ToolResultStatus.EXECUTE_SUCCESS, 
-                    output=result.result
+                    success=result.status == ToolResultStatus.EXECUTE_SUCCESS,
+                    output=result.result or ""
                 ))
                 logging.info(f"Tool '{toolcall.function.name}' completed! Result: {result}")
-        
+
         except Exception as e:
             logging.error(f"Error in {self.agent_name}'s act process: {str(e)}")
             raise RuntimeError(str(e))
@@ -251,11 +259,11 @@ class ReActAgent(BaseAgent):
         """Execute a single tool call with robust error handling"""
         if not toolcall or not toolcall.function:
             raise ValueError("Invalid tool call format")
-            
+
         name = toolcall.function.name
         if not self.available_tools.get_tool(name):
             raise ValueError(f"Unknown tool '{name}'")
-            
+
         try:
             # Parse arguments
             args = json.loads(toolcall.function.arguments or "{}")
@@ -267,7 +275,7 @@ class ReActAgent(BaseAgent):
             raise ValueError(f"Invalid JSON arguments for tool '{name}'")
         except Exception as e:
             logging.error(f"Tool({name}) execution error: {str(e)}")
-            raise RuntimeError(f"Tool({name}) execution error: {str(e)}") 
+            raise RuntimeError(f"Tool({name}) execution error: {str(e)}")
 
     def _has_special_tool(self, tool_calls: Optional[List[ToolCall]]) -> bool:
         """检查 tool_calls 中是否包含特殊工具"""
@@ -278,7 +286,7 @@ class ReActAgent(BaseAgent):
 
     def get_available_tools(self) -> List[str]:
         """Get available tools list
-        
+
         Returns:
             List[str]: List of available tools
         """
