@@ -1,0 +1,56 @@
+[tool.poetry]
+name = "simple-ai-agent"
+version = "0.1.0"
+description = "一个简单的AI Agent"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+
+# 服务框架
+fastapi = "0.116.2"
+uvicorn = "0.23.1"
+pydantic = ">=2.9.0,<2.10.0"
+pydantic-settings = "2.10.1"
+python-multipart = "0.0.20"
+
+# LLM
+openai = "==1.45.0"
+anthropic = "==0.34.1"
+
+# HTTP
+httpx = "==0.27.0"
+requests = "==2.32.2"
+
+# 日志与终端
+colorama = "0.4.6"
+
+# 模板
+jinja2 = ">=3.1.0,<4.0.0"
+
+# 网页解析（tools/local/web 等）
+readability-lxml = "==0.8.1"
+
+# 通用
+python-dotenv = "==1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.3.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[[tool.poetry.source]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+priority = "supplemental"
+
+[tool.poetry.scripts]
+start = "app.main:main"
