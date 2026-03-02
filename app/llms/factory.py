@@ -9,6 +9,8 @@ from .schemes import ChatResponse, AskToolResponse
 from .openaillm import OpenAIStyleLLM
 from .anthropicllm import AnthropicStyleLLM
 from .siliconllm import SiliconStyleLLM
+from .personlllm import PersonlLLM
+
 
 _LLM_MODELS_JSON = Path(get_project_base_directory()) / "llm_models.json"
 
@@ -59,6 +61,7 @@ class LLMFactory:
         "openai": OpenAIStyleLLM,
         "anthropic": AnthropicStyleLLM,
         "silicon": SiliconStyleLLM,
+        "personl": PersonLLM,
     }
 
     def __init__(self):
