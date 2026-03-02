@@ -1,7 +1,6 @@
-import asyncio
 import json
 import logging
-from typing import Dict, Optional, List, Literal, Union, AsyncGenerator, Any
+from typing import Dict, Optional, List, Literal, Any
 import httpx
 from .base import LLM
 from .schemes import ChatResponse, AskToolResponse, ToolInfo
@@ -43,22 +42,20 @@ class PersonLLM(LLM):
     def _get_chat_url(self) -> str:
         return f"http://{self.model_id}:{PERSON_LLM_PORT}/V2/chat/completions"
 
-    async def chat(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        user_question: str,
-        stream: bool = False,
-        history: List[Dict[str, Any]] = None,
-        **kwargs
-    ) -> Union[AsyncGenerator[str, None], ChatResponse]:
+    def chat(self,
+             system_prompt: str,
+             user_prompt: str,
+             user_question: str,
+             history: List[Dict[str, Any]] = None,
+             **kwargs) -> ChatResponse:
+        """同步聊天"""
         try:
             messages = self._format_openai_message(system_prompt, user_prompt, user_question, history)
             url = self._get_chat_url()
             body = {
                 "model": self.model_name or "default",
                 "messages": messages,
-                "stream": stream,
+                "stream": False,
                 "temperature": kwargs.get("temperature", self.configs.get("temperature", 0.7)),
                 "max_tokens": kwargs.get("max_tokens", self.configs.get("max_tokens", 2048)),
             }
@@ -67,37 +64,9 @@ class PersonLLM(LLM):
                     body[key] = value
             headers = self._build_headers()
 
-            def _sync_post():
-                with httpx.Client(timeout=60.0) as client:
-                    return client.post(url, json=body, headers=headers)
-
-            resp = await asyncio.to_thread(_sync_post)
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(url, json=body, headers=headers)
             resp.raise_for_status()
-
-            if stream:
-                def _collect_stream():
-                    chunks = []
-                    for line in resp.iter_lines():
-                        if line.startswith("data: "):
-                            data = line[6:].strip()
-                            if data == "[DONE]":
-                                break
-                            try:
-                                obj = json.loads(data)
-                                delta = obj.get("choices", [{}])[0].get("delta", {})
-                                c = delta.get("content")
-                                if c:
-                                    chunks.append(c)
-                            except json.JSONDecodeError:
-                                pass
-                    return chunks
-
-                chunks = await asyncio.to_thread(_collect_stream)
-                async def stream_gen():
-                    for c in chunks:
-                        yield c
-                return stream_gen()
-
             data = resp.json()
             content = ""
             if data.get("choices"):
@@ -112,17 +81,14 @@ class PersonLLM(LLM):
             logging.error("PersonLLM chat error: %s", e)
             return ChatResponse(content=str(e), success=False)
 
-    async def ask_tools(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        user_question: str,
-        history: List[Dict[str, Any]] = None,
-        stream: bool = False,
-        tools: Optional[List[dict]] = None,
-        tool_choice: Literal["none", "auto", "required"] = "auto",
-        **kwargs
-    ) -> Union[AsyncGenerator[Union[str, AskToolResponse], None], AskToolResponse]:
+    def ask_tools(self,
+                  system_prompt: str,
+                  user_prompt: str,
+                  user_question: str,
+                  history: List[Dict[str, Any]] = None,
+                  tools: Optional[List[dict]] = None,
+                  tool_choice: Literal["none", "auto", "required"] = "auto",
+                  **kwargs) -> AskToolResponse:
         try:
             if tool_choice == "required" and not tools:
                 raise ValueError("tool_choice 为 'required' 时必须提供 tools")
@@ -132,7 +98,7 @@ class PersonLLM(LLM):
             body = {
                 "model": self.model_name or "default",
                 "messages": messages,
-                "stream": stream,
+                "stream": False,
                 "temperature": kwargs.get("temperature", self.configs.get("temperature", 0.7)),
                 "max_tokens": kwargs.get("max_tokens", self.configs.get("max_tokens", 2048)),
             }
@@ -144,11 +110,8 @@ class PersonLLM(LLM):
                     body[key] = value
             headers = self._build_headers()
 
-            def _sync_post():
-                with httpx.Client(timeout=60.0) as client:
-                    return client.post(url, json=body, headers=headers)
-
-            resp = await asyncio.to_thread(_sync_post)
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
 

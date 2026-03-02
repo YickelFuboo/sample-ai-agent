@@ -1,9 +1,10 @@
+import asyncio
 import json
-from typing import List, Any, Optional, Tuple
-from enum import Enum
 import logging
-from pathlib import Path
 import re
+from enum import Enum
+from pathlib import Path
+from typing import List, Any, Optional, Tuple
 from app.tools.factory import ToolsFactory
 from app.agent.base import BaseAgent, AgentState
 from app.sessions.message import Role, Message, ToolCall, Function
@@ -174,31 +175,36 @@ class ReActAgent(BaseAgent):
         """Think about the question"""
         # 获取当前会话历史
         history = await self.get_history_context(self.session_id)
-        llm = llm_factory.create_llm_instance(self.llm_provider, self.llm_model)
+        llm = llm_factory.create_llm_instance(
+            self.llm_provider, self.llm_model,
+            model_id=self.model_id, session_id=self.session_id
+        )
 
         response = None
         tool_calls = []
         try:
             if self.tool_choices == ToolChoice.NONE:
-                response = await llm.chat(
-                    system_prompt=self.system_prompt,
-                    user_prompt=self.user_prompt,
-                    user_question=question,
-                    history=history,
+                response = await asyncio.to_thread(
+                    llm.chat,
+                    self.system_prompt,
+                    self.user_prompt,
+                    question,
+                    history,
                     temperature=self.temperature,
                     max_tokens=self.max_tokens
                 )
                 if not response.success:
                     raise Exception(response.content)
             else:
-                # Get response with tool options
-                response = await llm.ask_tools(
-                    system_prompt=self.system_prompt,
-                    user_prompt=self.user_prompt,
-                    user_question=question,
-                    history=history,
-                    tools=self.available_tools.to_params(),
-                    tool_choice=self.tool_choices.value,
+                # Get response with tool options（LLM 为同步接口，放入线程执行）
+                response = await asyncio.to_thread(
+                    llm.ask_tools,
+                    self.system_prompt,
+                    self.user_prompt,
+                    question,
+                    history,
+                    self.available_tools.to_params(),
+                    self.tool_choices.value,
                     temperature=self.temperature,
                     max_tokens=self.max_tokens
                 )

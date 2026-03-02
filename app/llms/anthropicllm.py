@@ -1,16 +1,16 @@
-from typing import Dict, Optional, List, Literal, Union, AsyncGenerator, Any
 import json
-from anthropic import AsyncAnthropic
 import logging
+from typing import Dict, Optional, List, Literal, Any
+from anthropic import Anthropic
 from .base import LLM
-from .schemes import ChatResponse, AskToolResponse
+from .schemes import ChatResponse, AskToolResponse, ToolInfo
 
 
 class AnthropicStyleLLM(LLM):
-    """Anthropic风格的API实现"""
+    """Anthropic风格的API实现（同步）"""
 
     def _initialize_model(self):
-        self.client = AsyncAnthropic(api_key=self.api_key)
+        self.client = Anthropic(api_key=self.api_key)
 
     def _format_anthropic_prompt(self,
                                system_prompt: str,
@@ -74,172 +74,80 @@ class AnthropicStyleLLM(LLM):
             logging.error(f"Error in _format_anthropic_prompt: {e}")
             raise e
 
-    async def chat(self,
-                  system_prompt: str,
-                  user_prompt: str,
-                  user_question: str,
-                  stream: bool = False,
-                  history: List[Dict[str, Any]] = None,
-                  **kwargs) -> Union[AsyncGenerator[str, None], ChatResponse]:
-        """Anthropic风格的聊天实现"""
+    def chat(self,
+             system_prompt: str,
+             user_prompt: str,
+             user_question: str,
+             stream: bool = False,
+             history: List[Dict[str, Any]] = None,
+             **kwargs) -> ChatResponse:
+        """Anthropic风格的聊天实现（同步，不支持 stream）"""
         try:
             prompt = self._format_anthropic_prompt(
                 system_prompt, user_prompt, user_question, history
             )
-
             params = {
                 "model": self.model_name,
                 "max_tokens": self.configs.get("max_tokens", 2048),
                 "temperature": self.configs.get("temperature", 0.7),
-                "stream": stream,
+                "stream": False,
                 **kwargs
             }
-
-            if stream:
-                response = await self.client.messages.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    **params
-                )
-                async def stream_response():
-                    try:
-                        async for chunk in response:
-                            if chunk.content:
-                                yield chunk.content
-                    except Exception as e:
-                        logging.error(f"Error in stream response: {e}")
-                        if response and hasattr(response, 'close'):
-                            await response.close()
-                        raise
-                return stream_response()
-
-            response = await self.client.messages.create(
+            response = self.client.messages.create(
                 messages=[{"role": "user", "content": prompt}],
                 **params
             )
-            return ChatResponse(
-                content=response.content,
-                success=True
-            )
+            return ChatResponse(content=response.content, success=True)
 
         except Exception as e:
             logging.error(f"Error in chat: {e}")
             raise e
 
-    async def ask_tools(self,
-                       system_prompt: str,
-                       user_prompt: str,
-                       user_question: str,
-                       history: List[Dict[str, Any]] = None,
-                       stream: bool = False,
-                       tools: Optional[List[dict]] = None,
-                       tool_choice: Literal["none", "auto", "required"] = "auto",
-                       **kwargs) -> Union[AsyncGenerator[Union[str, AskToolResponse], None], AskToolResponse]:
-        """Anthropic风格的工具调用实现
-
-        Note:
-            工具格式示例:
-            tools = [{
-                "name": "search",
-                "description": "搜索信息",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "搜索关键词"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }]
-
-            返回格式示例:
-            {
-                "tool_name": "search",
-                "tool_args": {"query": "Python单例模式"},
-                "thought": "需要搜索相关资料"
-            }
-        """
+    def ask_tools(self,
+                 system_prompt: str,
+                 user_prompt: str,
+                 user_question: str,
+                 history: List[Dict[str, Any]] = None,
+                 tools: Optional[List[dict]] = None,
+                 tool_choice: Literal["none", "auto", "required"] = "auto",
+                 **kwargs) -> AskToolResponse:
+        """Anthropic风格的工具调用实现（同步）"""
         try:
             prompt = self._format_anthropic_prompt(
                 system_prompt, user_prompt, user_question, history
             )
-
             params = {
                 "model": self.model_name,
                 "max_tokens": self.configs.get("max_tokens", 2048),
                 "temperature": self.configs.get("temperature", 0.7),
-                "stream": stream,
+                "stream": False,
                 **kwargs
             }
-
             if tools:
                 params["tools"] = tools
                 params["tool_choice"] = tool_choice
 
-            if stream:
-                response = await self.client.messages.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    **params
-                )
-                async def stream_response():
-                    collected_content = []
-                    try:
-                        async for chunk in response:
-                            if chunk.content:
-                                collected_content.append(chunk.content)
-                                yield chunk.content
-
-                        # 处理完整响应
-                        full_content = "".join(collected_content)
-                        try:
-                            result = json.loads(full_content)
-                            if isinstance(result, dict) and "tool_name" in result:
-                                yield AskToolResponse(
-                                    content=result.get("thought"),
-                                    tool_name=result["tool_name"],
-                                    tool_args=result["tool_args"],
-                                    success=True
-                                )
-                                return
-                        except json.JSONDecodeError:
-                            pass
-
-                        yield AskToolResponse(
-                            content=full_content,
-                            success=True
-                        )
-                    except Exception as e:
-                        logging.error(f"Error in stream response: {e}")
-                        if response and hasattr(response, 'close'):
-                            await response.close()
-                        raise
-                return stream_response()
-
-            # 非流式响应
-            response = await self.client.messages.create(
+            response = self.client.messages.create(
                 messages=[{"role": "user", "content": prompt}],
                 **params
             )
             content = response.content
-
-            # 尝试解析工具调用
             try:
                 result = json.loads(content)
                 if isinstance(result, dict) and "tool_name" in result:
+                    tool_calls = [ToolInfo(
+                        id="",
+                        name=result["tool_name"],
+                        args=result.get("tool_args", {})
+                    )]
                     return AskToolResponse(
                         content=result.get("thought"),
-                        tool_name=result["tool_name"],
-                        tool_args=result["tool_args"],
+                        tool_calls=tool_calls,
                         success=True
                     )
             except json.JSONDecodeError:
                 pass
-
-            return AskToolResponse(
-                content=content,
-                success=True
-            )
+            return AskToolResponse(content=content, success=True)
 
         except Exception as e:
             logging.error(f"Error in ask_tools: {e}")

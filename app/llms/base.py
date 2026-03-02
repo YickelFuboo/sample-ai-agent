@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Literal, Union, AsyncGenerator
+from typing import Dict, Any, Optional, List, Literal
 from .schemes import ChatResponse, AskToolResponse
 
 
@@ -10,8 +10,8 @@ class LLM(ABC):
                  model_type: str,
                  api_base: str,
                  api_key: str,
-                 model_id: str = "", # 大赛使用
-                 session_id: str = "", # 大赛使用
+                 model_id: str = "",
+                 session_id: str = "",
                  **kwargs):
         self.model_name = model_name
         self.model_type = model_type
@@ -26,28 +26,27 @@ class LLM(ABC):
     def _initialize_model(self):
         """初始化模型，包括设置 max_tokens"""
         pass
+
     @abstractmethod
-    async def chat(self,
-                  system_prompt: str,
-                  user_prompt: str,
-                  user_question: str,
-                  stream: bool = False,
-                  history: List[Dict[str, str]] = None,
-                  **kwargs) -> Union[AsyncGenerator[str, None], ChatResponse]:
-        """统一的对话方法"""
+    def chat(self,
+             system_prompt: str,
+             user_prompt: str,
+             user_question: str,
+             history: List[Dict[str, str]] = None,
+             **kwargs) -> ChatResponse:
+        """统一的对话方法（同步）"""
         pass
 
     @abstractmethod
-    async def ask_tools(self,
-                       system_prompt: str,
-                       user_prompt: str,
-                       user_question: str,
-                       history: List[Dict[str, str]] = None,
-                       stream: bool = False,
-                       tools: Optional[List[dict]] = None,
-                       tool_choice: Literal["none", "auto", "required"] = "auto",
-                       **kwargs) -> Union[AsyncGenerator[Union[str, AskToolResponse], None], AskToolResponse]:
-        """统一的工具调用方法"""
+    def ask_tools(self,
+                 system_prompt: str,
+                 user_prompt: str,
+                 user_question: str,
+                 history: List[Dict[str, str]] = None,
+                 tools: Optional[List[dict]] = None,
+                 tool_choice: Literal["none", "auto", "required"] = "auto",
+                 **kwargs) -> AskToolResponse:
+        """统一的工具调用方法（同步）"""
         pass
 
 

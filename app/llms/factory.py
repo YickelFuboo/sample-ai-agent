@@ -33,9 +33,11 @@ def _load_llm_configs_from_json(path: Path) -> Dict[str, Dict[str, Any]]:
                 "api_style": api_style,
                 "api_base": base_url,
                 "api_key": api_key,
+                "api_path": prov_cfg.get("api_path", "V2"),
+                "api_port": prov_cfg.get("api_port", 80),
                 "description": (inst_cfg or {}).get("description", ""),
-                "max_tokens": 4096,
-                "temperature": 0.7,
+                "max_tokens": prov_cfg.get("max_tokens", 4096),
+                "temperature": prov_cfg.get("temperature", 0.7),
             }
     return result
 
@@ -82,7 +84,7 @@ class LLMFactory:
 
         return config
 
-    def create_llm_instance(self, provider: str, model_name: str, model_id: str = "", session_id: str = "", *kwargs: Any) -> LLM:
+    def create_llm_instance(self, provider: str, model_name: str, model_id: str = "", session_id: str = "", **kwargs: Any) -> LLM:
         """创建LLM实例"""
         if not provider or not model_name or f"{provider}/{model_name}" not in self.llmconfigs:
             if not self.default_provider or not self.default_model_name:
@@ -99,8 +101,10 @@ class LLMFactory:
 
         config = self.llmconfigs[full_name]
         params = {
-            "temperature": config["temperature"],
-            "max_tokens": config["max_tokens"],
+            "temperature": config.get("temperature", 0.7),
+            "max_tokens": config.get("max_tokens", 4096),
+            "api_path": config.get("api_path", "V2"),
+            "api_port": config.get("api_port", 80),
         }
         params.update(kwargs)
 

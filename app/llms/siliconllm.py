@@ -1,10 +1,9 @@
-from typing import Dict, Optional, List, Literal, Union, AsyncGenerator, Any
 import json
-import requests
-import httpx
 import logging
+from typing import Dict, Optional, List, Literal, Any
+import httpx
 from .base import LLM
-from .schemes import ChatResponse, AskToolResponse
+from .schemes import ChatResponse, AskToolResponse, ToolInfo
 
 
 class SiliconStyleLLM(LLM):
@@ -51,23 +50,22 @@ class SiliconStyleLLM(LLM):
             raise e
 
 
-    async def chat(self,
-                   system_prompt: str,
-                   user_prompt: str,
-                   user_question: str,
-                   stream: bool = False,
-                   history: List[Dict[str, Any]] = None,
-                   **kwargs) -> Union[AsyncGenerator[str, None], ChatResponse]:
-        """Silicon风格的聊天实现"""
+    def chat(self,
+             system_prompt: str,
+             user_prompt: str,
+             user_question: str,
+             stream: bool = False,
+             history: List[Dict[str, Any]] = None,
+             **kwargs) -> ChatResponse:
+        """Silicon风格的聊天实现（同步，不支持 stream）"""
         try:
             message = self._format_silicon_message(
                 system_prompt, user_prompt, user_question, history
             )
-
             payload = {
                 "model": self.model_name,
                 "messages": message,
-                "stream": stream,
+                "stream": False,
                 "temperature": self.configs.get("temperature", 0.7),
                 "max_tokens": self.configs.get("max_tokens", 2048),
                 "stop": ["null"],
@@ -78,90 +76,34 @@ class SiliconStyleLLM(LLM):
                 "response_format": {"type": "text"},
                 **kwargs
             }
-
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+            with httpx.Client(timeout=60.0) as client:
+                response = client.post(self.api_base, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("choices"):
+                return ChatResponse(
+                    content=data["choices"][0]["message"]["content"],
+                    success=True
+                )
+            return ChatResponse(content="Invalid response format from API", success=False)
 
-            if stream:
-                async def stream_response():
-                    response = None
-                    try:
-                        async with httpx.AsyncClient(timeout=60.0) as client:
-                            response = await client.post(self.api_base, json=payload, headers=headers, timeout=None)
-                            async for line in response.aiter_lines():
-                                if line:
-                                    if line.startswith("data: "):
-                                        if line.strip() == "data: [DONE]":
-                                            break
-                                        try:
-                                            data = json.loads(line[6:])
-                                            if content := data.get("choices", [{}])[0].get("delta", {}).get("content"):
-                                                yield content
-                                        except json.JSONDecodeError:
-                                            continue
-                    except Exception as e:
-                        logging.error(f"Error in stream response: {e}")
-                        if response:
-                            await response.aclose()
-                        raise
-                return stream_response()
-
-            # 非流式响应
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(self.api_base, json=payload, headers=headers, timeout=None)
-                response.raise_for_status()
-                data = response.json()
-                if 'choices' in data and len(data['choices']) > 0:
-                    return ChatResponse(
-                        content=data['choices'][0]['message']['content'],
-                        success=True
-                    )
-                else:
-                    return ChatResponse(
-                        content="Invalid response format from API",
-                        success=False
-                    )
         except Exception as e:
             logging.error(f"Error in chat: {e}")
             raise e
 
-    async def ask_tools(self,
-                        system_prompt: str,
-                        user_prompt: str,
-                        user_question: str,
-                        history: List[Dict[str, Any]] = None,
-                        stream: bool = False,
-                        tools: Optional[List[dict]] = None,
-                        tool_choice: Literal["none", "auto", "required"] = "auto",
-                        **kwargs) -> Union[AsyncGenerator[Union[str, AskToolResponse], None], AskToolResponse]:
-        """Silicon风格的工具调用实现
-
-        Note:
-            工具格式示例:
-            tools = [{
-                "name": "search",
-                "description": "搜索信息",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "搜索关键词"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }]
-
-            返回格式示例:
-            {
-                "tool_name": "search",
-                "tool_args": {"query": "Python单例模式"},
-                "thought": "需要搜索相关资料"
-            }
-        """
+    def ask_tools(self,
+                  system_prompt: str,
+                  user_prompt: str,
+                  user_question: str,
+                  history: List[Dict[str, Any]] = None,
+                  tools: Optional[List[dict]] = None,
+                  tool_choice: Literal["none", "auto", "required"] = "auto",
+                  **kwargs) -> AskToolResponse:
+        """Silicon风格的工具调用实现（同步）"""
         try:
             if tool_choice == "required" and not tools:
                 raise ValueError("tool_choice 为 'required' 时必须提供 tools")
@@ -169,11 +111,10 @@ class SiliconStyleLLM(LLM):
             message = self._format_silicon_message(
                 system_prompt, user_prompt, user_question, history
             )
-
             payload = {
                 "model": self.model_name,
                 "messages": message,
-                "stream": stream,
+                "stream": False,
                 "temperature": self.configs.get("temperature", 0.7),
                 "max_tokens": self.configs.get("max_tokens", 2048),
                 "stop": ["null"],
@@ -183,8 +124,7 @@ class SiliconStyleLLM(LLM):
                 "n": 1,
                 "response_format": {"type": "text"},
                 **kwargs
-             }
-
+            }
             if tools:
                 payload["tools"] = tools
                 payload["tool_choice"] = tool_choice
@@ -193,68 +133,30 @@ class SiliconStyleLLM(LLM):
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-
-            if stream:
-                async def stream_response():
-                    response = None
+            with httpx.Client(timeout=60.0) as client:
+                response = client.post(self.api_base, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            msg = data.get("choices", [{}])[0].get("message", {})
+            content = msg.get("content", "")
+            tool_calls_raw = msg.get("tool_calls")
+            if tool_calls_raw:
+                tool_calls = []
+                for tc in tool_calls_raw:
+                    func = tc.get("function", {})
+                    args = func.get("arguments", "{}")
                     try:
-                        async with httpx.AsyncClient(timeout=60.0) as client:
-                            response = await client.post(self.api_base, json=payload, headers=headers, timeout=None)
-                            collected = {"content": [], "tool": None}
-                            async for line in response.aiter_lines():
-                                if line:
-                                    if line.startswith("data: "):
-                                        if line.strip() == "data: [DONE]":
-                                            break
-                                        try:
-                                            data = json.loads(line[6:])
-                                            if tool_calls := data.get("choices", [{}])[0].get("delta", {}).get("tool_calls"):
-                                                # 处理工具调用
-                                                tool_call = tool_calls[0]
-                                                if not collected["tool"]:
-                                                    collected["tool"] = {
-                                                        "name": tool_call.get("function", {}).get("name"),
-                                                        "arguments": tool_call.get("function", {}).get("arguments", "{}")
-                                                    }
-                                            elif content := data.get("choices", [{}])[0].get("delta", {}).get("content"):
-                                                # 处理普通内容
-                                                collected["content"].append(content)
-                                                yield content
-                                        except json.JSONDecodeError:
-                                            continue
-                            # 最后返回完整的工具调用结果
-                            if collected["tool"]:
-                                yield AskToolResponse(
-                                    content="".join(collected["content"]),
-                                    tool_name=collected["tool"]["name"],
-                                    tool_args=json.loads(collected["tool"]["arguments"]),
-                                    success=True
-                                )
-                    except Exception as e:
-                        logging.error(f"Error in stream response: {e}")
-                        if response:
-                            await response.aclose()
-                        raise
-                return stream_response()
+                        args = json.loads(args) if isinstance(args, str) else args
+                    except json.JSONDecodeError:
+                        args = {}
+                    tool_calls.append(ToolInfo(
+                        id=tc.get("id", ""),
+                        name=func.get("name", ""),
+                        args=args
+                    ))
+                return AskToolResponse(content=content, tool_calls=tool_calls, success=True)
+            return AskToolResponse(content=content, success=True)
 
-            # 非流式响应
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(self.api_base, json=payload, headers=headers, timeout=None)
-                response.raise_for_status()
-                data = response.json()
-                msg = data.get("choices", [{}])[0].get("message", {})
-                if tool_calls := msg.get("tool_calls"):
-                    tool_call = tool_calls[0]
-                    return AskToolResponse(
-                        content=msg.get("content", ""),
-                        tool_name=tool_call.get("function", {}).get("name"),
-                        tool_args=json.loads(tool_call.get("function", {}).get("arguments", "{}")),
-                        success=True
-                    )
-                return AskToolResponse(
-                    content=msg.get("content", ""),
-                    success=True
-                )
         except Exception as e:
             logging.error(f"Error in ask_tools: {e}")
             raise e
