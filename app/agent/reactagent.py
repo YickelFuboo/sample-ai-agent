@@ -184,8 +184,7 @@ class ReActAgent(BaseAgent):
         tool_calls = []
         try:
             if self.tool_choices == ToolChoice.NONE:
-                response = await asyncio.to_thread(
-                    llm.chat,
+                response = await llm.chat(
                     self.system_prompt,
                     self.user_prompt,
                     question,
@@ -196,9 +195,7 @@ class ReActAgent(BaseAgent):
                 if not response.success:
                     raise Exception(response.content)
             else:
-                # Get response with tool options（LLM 为同步接口，放入线程执行）
-                response = await asyncio.to_thread(
-                    llm.ask_tools,
+                response = await llm.ask_tools(
                     self.system_prompt,
                     self.user_prompt,
                     question,

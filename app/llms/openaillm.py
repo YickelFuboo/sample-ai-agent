@@ -1,24 +1,25 @@
 import json
 import logging
 from typing import Dict, Optional, List, Literal, Any
-from openai import OpenAI
+from openai import AsyncOpenAI
 from .base import LLM
 from .schemes import ChatResponse, AskToolResponse, ToolInfo
 
+
 class OpenAIStyleLLM(LLM):
-    """OpenAI风格的API实现（使用同步客户端）"""
+    """OpenAI风格的API实现（使用异步客户端）"""
     def _initialize_model(self):
         if self.model_id:  # 大赛使用：model_id 为 IPv4 地址，端口固定 8888
             default_headers = {"Session-ID": self.session_id} if self.session_id else None
             base_url = f"http://{self.model_id}:8888/v1"
-            self.client = OpenAI(
+            self.client = AsyncOpenAI(
                 api_key=self.api_key,
                 base_url=base_url,
                 timeout=60.0,
                 default_headers=default_headers
             )
         else:
-            self.client = OpenAI(
+            self.client = AsyncOpenAI(
                 api_key=self.api_key,
                 base_url=self.api_base,
                 timeout=60.0
@@ -65,13 +66,13 @@ class OpenAIStyleLLM(LLM):
             logging.error(f"Error in _format_openai_message: {e}")
             raise e
 
-    def chat(self,
-             system_prompt: str,
-             user_prompt: str,
-             user_question: str,
-             history: List[Dict[str, Any]] = None,
-             **kwargs) -> ChatResponse:
-        """OpenAI风格的聊天实现（同步）"""
+    async def chat(self,
+                  system_prompt: str,
+                  user_prompt: str,
+                  user_question: str,
+                  history: List[Dict[str, Any]] = None,
+                  **kwargs) -> ChatResponse:
+        """OpenAI风格的聊天实现（异步）"""
         try:
             messages = self._format_openai_message(
                 system_prompt, user_prompt, user_question, history
@@ -86,7 +87,7 @@ class OpenAIStyleLLM(LLM):
                 if key not in params:
                     params[key] = value
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=model, messages=messages, **params
             )
             return ChatResponse(
@@ -98,7 +99,7 @@ class OpenAIStyleLLM(LLM):
             logging.error(f"Error in chat: {e}")
             raise e
 
-    def ask_tools(self,
+    async def ask_tools(self,
                   system_prompt: str,
                   user_prompt: str,
                   user_question: str,
@@ -106,7 +107,7 @@ class OpenAIStyleLLM(LLM):
                   tools: Optional[List[dict]] = None,
                   tool_choice: Literal["none", "auto", "required"] = "auto",
                   **kwargs) -> AskToolResponse:
-        """OpenAI风格的工具调用实现（同步）"""
+        """OpenAI风格的工具调用实现（异步）"""
         try:
             if tool_choice == "required" and not tools:
                 raise ValueError("tool_choice 为 'required' 时必须提供 tools")
@@ -127,7 +128,7 @@ class OpenAIStyleLLM(LLM):
                 if key not in params:
                     params[key] = value
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=model, messages=messages, **params
             )
             if not response.choices or not response.choices[0].message:

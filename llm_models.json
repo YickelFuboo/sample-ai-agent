@@ -9,7 +9,7 @@
       "description": "静态用的测试模型",
       "base_url": "",
       "api_key": "",
-      "api_style": "personl",
+      "api_style": "openai",
       "is_valid": 0,
       "instances": {
         "default": {

@@ -28,25 +28,25 @@ class LLM(ABC):
         pass
 
     @abstractmethod
-    def chat(self,
-             system_prompt: str,
-             user_prompt: str,
-             user_question: str,
-             history: List[Dict[str, str]] = None,
-             **kwargs) -> ChatResponse:
-        """统一的对话方法（同步）"""
+    async def chat(self,
+                  system_prompt: str,
+                  user_prompt: str,
+                  user_question: str,
+                  history: List[Dict[str, str]] = None,
+                  **kwargs) -> ChatResponse:
+        """统一的对话方法（异步）"""
         pass
 
     @abstractmethod
-    def ask_tools(self,
-                 system_prompt: str,
-                 user_prompt: str,
-                 user_question: str,
-                 history: List[Dict[str, str]] = None,
-                 tools: Optional[List[dict]] = None,
-                 tool_choice: Literal["none", "auto", "required"] = "auto",
-                 **kwargs) -> AskToolResponse:
-        """统一的工具调用方法（同步）"""
+    async def ask_tools(self,
+                       system_prompt: str,
+                       user_prompt: str,
+                       user_question: str,
+                       history: List[Dict[str, str]] = None,
+                       tools: Optional[List[dict]] = None,
+                       tool_choice: Literal["none", "auto", "required"] = "auto",
+                       **kwargs) -> AskToolResponse:
+        """统一的工具调用方法（异步）"""
         pass
 
 

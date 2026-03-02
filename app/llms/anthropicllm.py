@@ -1,16 +1,16 @@
 import json
 import logging
 from typing import Dict, Optional, List, Literal, Any
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from .base import LLM
 from .schemes import ChatResponse, AskToolResponse, ToolInfo
 
 
 class AnthropicStyleLLM(LLM):
-    """Anthropic风格的API实现（同步）"""
+    """Anthropic风格的API实现（异步）"""
 
     def _initialize_model(self):
-        self.client = Anthropic(api_key=self.api_key)
+        self.client = AsyncAnthropic(api_key=self.api_key)
 
     def _format_anthropic_prompt(self,
                                system_prompt: str,
@@ -74,14 +74,13 @@ class AnthropicStyleLLM(LLM):
             logging.error(f"Error in _format_anthropic_prompt: {e}")
             raise e
 
-    def chat(self,
-             system_prompt: str,
-             user_prompt: str,
-             user_question: str,
-             stream: bool = False,
-             history: List[Dict[str, Any]] = None,
-             **kwargs) -> ChatResponse:
-        """Anthropic风格的聊天实现（同步，不支持 stream）"""
+    async def chat(self,
+                  system_prompt: str,
+                  user_prompt: str,
+                  user_question: str,
+                  history: List[Dict[str, Any]] = None,
+                  **kwargs) -> ChatResponse:
+        """Anthropic风格的聊天实现（异步）"""
         try:
             prompt = self._format_anthropic_prompt(
                 system_prompt, user_prompt, user_question, history
@@ -93,25 +92,28 @@ class AnthropicStyleLLM(LLM):
                 "stream": False,
                 **kwargs
             }
-            response = self.client.messages.create(
+            response = await self.client.messages.create(
                 messages=[{"role": "user", "content": prompt}],
                 **params
             )
-            return ChatResponse(content=response.content, success=True)
+            content = response.content
+            if isinstance(content, list) and content:
+                content = getattr(content[0], "text", content[0]) if hasattr(content[0], "text") else str(content[0])
+            return ChatResponse(content=content, success=True)
 
         except Exception as e:
             logging.error(f"Error in chat: {e}")
             raise e
 
-    def ask_tools(self,
-                 system_prompt: str,
-                 user_prompt: str,
-                 user_question: str,
-                 history: List[Dict[str, Any]] = None,
-                 tools: Optional[List[dict]] = None,
-                 tool_choice: Literal["none", "auto", "required"] = "auto",
-                 **kwargs) -> AskToolResponse:
-        """Anthropic风格的工具调用实现（同步）"""
+    async def ask_tools(self,
+                        system_prompt: str,
+                        user_prompt: str,
+                        user_question: str,
+                        history: List[Dict[str, Any]] = None,
+                        tools: Optional[List[dict]] = None,
+                        tool_choice: Literal["none", "auto", "required"] = "auto",
+                        **kwargs) -> AskToolResponse:
+        """Anthropic风格的工具调用实现（异步）"""
         try:
             prompt = self._format_anthropic_prompt(
                 system_prompt, user_prompt, user_question, history
@@ -127,11 +129,13 @@ class AnthropicStyleLLM(LLM):
                 params["tools"] = tools
                 params["tool_choice"] = tool_choice
 
-            response = self.client.messages.create(
+            response = await self.client.messages.create(
                 messages=[{"role": "user", "content": prompt}],
                 **params
             )
             content = response.content
+            if isinstance(content, list) and content:
+                content = getattr(content[0], "text", content[0]) if hasattr(content[0], "text") else str(content[0])
             try:
                 result = json.loads(content)
                 if isinstance(result, dict) and "tool_name" in result:

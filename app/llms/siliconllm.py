@@ -50,14 +50,13 @@ class SiliconStyleLLM(LLM):
             raise e
 
 
-    def chat(self,
-             system_prompt: str,
-             user_prompt: str,
-             user_question: str,
-             stream: bool = False,
-             history: List[Dict[str, Any]] = None,
-             **kwargs) -> ChatResponse:
-        """Silicon风格的聊天实现（同步，不支持 stream）"""
+    async def chat(self,
+                  system_prompt: str,
+                  user_prompt: str,
+                  user_question: str,
+                  history: List[Dict[str, Any]] = None,
+                  **kwargs) -> ChatResponse:
+        """Silicon风格的聊天实现（异步）"""
         try:
             message = self._format_silicon_message(
                 system_prompt, user_prompt, user_question, history
@@ -80,8 +79,8 @@ class SiliconStyleLLM(LLM):
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            with httpx.Client(timeout=60.0) as client:
-                response = client.post(self.api_base, json=payload, headers=headers)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(self.api_base, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
             if data.get("choices"):
@@ -95,15 +94,15 @@ class SiliconStyleLLM(LLM):
             logging.error(f"Error in chat: {e}")
             raise e
 
-    def ask_tools(self,
-                  system_prompt: str,
-                  user_prompt: str,
-                  user_question: str,
-                  history: List[Dict[str, Any]] = None,
-                  tools: Optional[List[dict]] = None,
-                  tool_choice: Literal["none", "auto", "required"] = "auto",
-                  **kwargs) -> AskToolResponse:
-        """Silicon风格的工具调用实现（同步）"""
+    async def ask_tools(self,
+                        system_prompt: str,
+                        user_prompt: str,
+                        user_question: str,
+                        history: List[Dict[str, Any]] = None,
+                        tools: Optional[List[dict]] = None,
+                        tool_choice: Literal["none", "auto", "required"] = "auto",
+                        **kwargs) -> AskToolResponse:
+        """Silicon风格的工具调用实现（异步）"""
         try:
             if tool_choice == "required" and not tools:
                 raise ValueError("tool_choice 为 'required' 时必须提供 tools")
@@ -133,8 +132,8 @@ class SiliconStyleLLM(LLM):
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            with httpx.Client(timeout=60.0) as client:
-                response = client.post(self.api_base, json=payload, headers=headers)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(self.api_base, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
             msg = data.get("choices", [{}])[0].get("message", {})
