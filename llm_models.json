@@ -5,6 +5,18 @@
     "model": "deepseek-chat"
   },
   "models": {
+    "personal": {
+      "description": "静态用的测试模型",
+      "base_url": "",
+      "api_key": "",
+      "api_style": "openai",
+      "is_valid": 0,
+      "instances": {
+        "default": {
+          "description": "竞赛用的默认模型"
+        }
+      }
+    },
     "openai": {
       "description": "OpenAI GPT系列模型",
       "base_url": "https://api.openai.com/v1",

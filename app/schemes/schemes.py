@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 from typing import Optional, List
+import json
 
 
 class UserRequest(BaseModel):
@@ -25,3 +26,12 @@ class UserResponse(BaseModel):
     timestamp: int = 0
     duration_ms: int = 0
 
+# 房源项目使用
+class HouseRespone(BaseModel):
+    """房源项目使用"""
+    message: str = ""
+    houses: List[str] = []
+
+    def to_json(self) -> str:
+        """将房源项目使用转换为JSON字符串"""
+        return json.dumps(self.model_dump(), ensure_ascii=False)

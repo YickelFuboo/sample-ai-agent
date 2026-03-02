@@ -8,11 +8,20 @@ from .schemes import ChatResponse, AskToolResponse, ToolInfo
 class OpenAIStyleLLM(LLM):
     """OpenAI风格的API实现"""
     def _initialize_model(self):
-        self.client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.api_base,
-            timeout=60.0
-        )
+        if self.model_id: # 大赛使用
+            default_headers = {"Session-ID": self.session_id} if self.session_id else None
+            self.client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=f"{self.model_id}/v1",
+                timeout=60.0,
+                default_headers=default_headers
+            )
+        else:
+            self.client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=self.api_base,
+                timeout=60.0
+            )
 
     def _format_openai_message(
         self,
@@ -71,7 +80,7 @@ class OpenAIStyleLLM(LLM):
             params = {
                 "stream": stream,
                 "temperature": kwargs.get("temperature", self.configs.get("temperature", 0.7)),
-                "max_tokens": kwargs.get("max_tokens", self.configs.get("max_tokens", 2048))
+                "max_tokens": kwargs.get("max_tokens", self.configs.get("max_tokens", 2048)),
             }
             # 添加其他参数，避免重复
             for key, value in kwargs.items():
@@ -208,6 +217,10 @@ class OpenAIStyleLLM(LLM):
                         name=tool_call.function.name,
                         args=args
                     ))
+
+            # 比赛打印用
+            if response.usage.total_tokens and response.usage.total_tokens > 300:
+                logging.error(f"=======Total tokens exceeded 300: {response.usage.total_tokens}")
 
             return AskToolResponse(
                 content=msg.content or "",

@@ -10,12 +10,16 @@ class LLM(ABC):
                  model_type: str,
                  api_base: str,
                  api_key: str,
+                 model_id: str = "", # 大赛使用
+                 session_id: str = "", # 大赛使用
                  **kwargs):
         self.model_name = model_name
         self.model_type = model_type
         self.api_base = api_base
         self.api_key = api_key
         self.configs = kwargs
+        self.model_id = model_id
+        self.session_id = session_id
         self._initialize_model()
 
     @abstractmethod

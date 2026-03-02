@@ -82,7 +82,7 @@ class LLMFactory:
 
         return config
 
-    def create_llm_instance(self, provider: str, model_name: str, *kwargs: Any) -> LLM:
+    def create_llm_instance(self, provider: str, model_name: str, model_id: str = "", session_id: str = "", *kwargs: Any) -> LLM:
         """创建LLM实例"""
         if not provider or not model_name or f"{provider}/{model_name}" not in self.llmconfigs:
             if not self.default_provider or not self.default_model_name:
@@ -109,6 +109,8 @@ class LLMFactory:
             model_type=config["api_style"],
             api_base=config["api_base"],
             api_key=config["api_key"],
+            model_id=model_id, # 大赛使用
+            session_id=session_id, # 大赛使用
             **params
         )
 
