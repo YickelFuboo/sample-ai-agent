@@ -10,6 +10,7 @@ from app.sessions.message import Role, Message, ToolCall, Function
 from app.llms.factory import llm_factory
 from app.tools.schemes import ToolResult, ToolResultStatus
 from app.tools.local.shell import ExecTool
+from app.tools.local.house_race import GetLandMarks
 from app.prompts.prompt_template_load import get_prompt_template
 from app.schemes.schemes import tool_result
 
@@ -92,13 +93,8 @@ class ReActAgent(BaseAgent):
         # 如果没有指定工具，则注册默认工具
         if self.available_tools:
             self.available_tools.register_tools(
-                #ReadFileTool(),
-                #WriteFileTool(),
-                #ReleaseFileTextTool(),
-                #InsertFileTool(),
-                #ListDirTool(),
-                ExecTool(),
-                #Terminate(),
+                #ExecTool(),
+                GetLandMarks(),
             )
 
     def _strip_think(text: str | None) -> str | None:

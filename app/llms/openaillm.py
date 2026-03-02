@@ -8,11 +8,12 @@ from .schemes import ChatResponse, AskToolResponse, ToolInfo
 class OpenAIStyleLLM(LLM):
     """OpenAI风格的API实现"""
     def _initialize_model(self):
-        if self.model_id: # 大赛使用
+        if self.model_id:  # 大赛使用：model_id 为 IPv4 地址，端口固定 8888
             default_headers = {"Session-ID": self.session_id} if self.session_id else None
+            base_url = f"http://{self.model_id}:8888/v1"
             self.client = AsyncOpenAI(
                 api_key=self.api_key,
-                base_url=f"{self.model_id}/v1",
+                base_url=base_url,
                 timeout=60.0,
                 default_headers=default_headers
             )
