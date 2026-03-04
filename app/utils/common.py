@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import tomllib
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 def get_project_meta(package_name: str = "knowledge-service"):
     """从 pyproject.toml 读取项目元数据"""
@@ -46,3 +46,8 @@ def _format_value(v: Any) -> str:
 def dict_to_str(d: Dict[str, Any]) -> str:
     """将 Dict 转为一行字符串，格式为 key:value, key:value；若 value 为 Dict 则 value 呈 key:value, key:(key:value, ...)。"""
     return ", ".join(f"{k}: {_format_value(v)}" for k, v in d.items())
+
+
+def dict_to_str_by_keys(d: Dict[str, Any], keys: List[str]) -> str:
+    """仅取指定 key 列表中的数据，转为一行字符串，格式同 dict_to_str。"""
+    return ", ".join(f"{k}: {_format_value(d[k])}" for k in keys if k in d)
