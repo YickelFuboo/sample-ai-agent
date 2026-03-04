@@ -1,11 +1,13 @@
 import asyncio
+import logging
 import os
 import re
 import subprocess
 import sys
-import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from app.memory import append_shell_result
 from ..base import BaseTool
 from ..schemes import ToolResult, ToolSuccessResult, ToolErrorResult
 
@@ -70,7 +72,7 @@ class ExecTool(BaseTool):
         if sys.platform == "win32":
             base += " On Windows, use PowerShell or cmd; Unix commands (e.g. head, tail, grep) are not available by default."
         return base
-    
+
     @property
     def parameters(self) -> dict[str, Any]:
         return {
@@ -87,7 +89,7 @@ class ExecTool(BaseTool):
             },
             "required": ["command"]
         }
-    
+
     async def execute(self, command: str, working_dir: str | None = None, **kwargs: Any) -> ToolResult:
         cwd = working_dir or self.working_dir or os.getcwd()
         try:
@@ -133,7 +135,7 @@ class ExecTool(BaseTool):
             output_parts = []
             if stdout:
                 output_parts.append(stdout.decode("utf-8", errors="replace"))
-            
+
             if stderr:
                 stderr_text = stderr.decode("utf-8", errors="replace")
                 if stderr_text.strip():
@@ -146,6 +148,13 @@ class ExecTool(BaseTool):
             max_len = 10000
             if len(result) > max_len:
                 result = result[:max_len] + f"\n... (truncated, {len(result) - max_len} more chars)"
+
+            try:
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                block = f"\n## {ts}\n\n**Command:**\n```\n{command}\n```\n\n**CWD:** `{cwd_path}`\n\n**Output:**\n```\n{result}\n```\n"
+                append_shell_result(block)
+            except Exception:
+                pass
 
             return ToolSuccessResult(result)
 

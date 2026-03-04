@@ -90,6 +90,17 @@ async def update_metadata(
 
 
 @router.delete(
+    "/clear",
+    summary="清空所有会话",
+    description="删除所有会话记录（存储与内存缓存）",
+)
+async def clear_all_sessions():
+    """清空所有会话记录"""
+    count = await SESSION_MANAGER.clear_all_sessions()
+    return {"message": "All sessions cleared successfully", "deleted_count": count}
+
+
+@router.delete(
     "/{session_id}",
     summary="删除会话",
     description="删除指定的会话",

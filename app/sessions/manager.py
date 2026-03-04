@@ -27,13 +27,13 @@ class SessionManager:
         llm_model: Optional[str] = None
     ) -> str:
         """创建新会话。DB 由 Store 内部管理，不由 API 注入。"""
-        if session_id is None or session_id == "":  
+        if session_id is None or session_id == "":
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             random_suffix = uuid.uuid4().hex[:8]
             session_id = f"session_{timestamp}_{random_suffix}"
         else:
             session_id = session_id
-        
+
         session = Session(
             session_id=session_id,
             user_id=user_id,
@@ -64,7 +64,7 @@ class SessionManager:
         except Exception as e:
             logging.error("Error adding message to session %s: %s", session_id, e)
             return False
-    
+
     async def get_messages(self, session_id: str) -> List[Message]:
         """Get messages from session"""
         session = await self.get_session(session_id)
@@ -134,6 +134,17 @@ class SessionManager:
         except Exception as e:
             logging.error("Error clearing history for session %s: %s", session_id, e)
             return False
+
+    async def clear_all_sessions(self) -> int:
+        """清空所有会话记录（存储与内存缓存），返回删除的会话数量。"""
+        all_sessions = await self.get_all_sessions()
+        count = 0
+        for session in all_sessions:
+            ok = await self.delete_session(session.session_id)
+            if ok:
+                count += 1
+        logging.info("Cleared all sessions: %d deleted", count)
+        return count
 
 
 SESSION_MANAGER = SessionManager()

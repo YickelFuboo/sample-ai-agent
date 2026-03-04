@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import tomllib
+from typing import Any, Dict
 
 def get_project_meta(package_name: str = "knowledge-service"):
     """从 pyproject.toml 读取项目元数据"""
@@ -11,7 +12,7 @@ def get_project_meta(package_name: str = "knowledge-service"):
             "version": "",
             "description": "",
         }
-    
+
     with open(toml_path, "rb") as f:
         data = tomllib.load(f)
     poetry = data.get("tool", {}).get("poetry", {})
@@ -32,3 +33,16 @@ def get_project_base_directory():
         project_root = os.path.dirname(project_root)
 
     return project_root
+
+
+def _format_value(v: Any) -> str:
+    """递归格式化值：若为 Dict 则呈现为 (key:value, key:value)。"""
+    if isinstance(v, dict):
+        inner = ", ".join(f"{k}: {_format_value(val)}" for k, val in v.items())
+        return f"({inner})"
+    return str(v)
+
+
+def dict_to_str(d: Dict[str, Any]) -> str:
+    """将 Dict 转为一行字符串，格式为 key:value, key:value；若 value 为 Dict 则 value 呈 key:value, key:(key:value, ...)。"""
+    return ", ".join(f"{k}: {_format_value(v)}" for k, v in d.items())

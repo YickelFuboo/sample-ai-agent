@@ -1,13 +1,25 @@
-from typing import Dict, List, Tuple, Any
+import json
 import logging
+from typing import Any, Dict, List, Set, Tuple
 from .base import BaseTool
 from .schemes import ToolResult, ToolSuccessResult, ToolTimeoutResult, ToolErrorResult, ToolCancelledResult
 
+TOOLS_CACHE_NAME = ("exec",)
+MAX_CACHE_SIZE = 256
+
+
+def _cache_key(tool_name: str, tool_params: Dict[str, Any]) -> Tuple[str, str]:
+    """工具名 + 参数生成可哈希的缓存键（参数按 key 排序序列化）。"""
+    return (tool_name, json.dumps(tool_params, sort_keys=True))
+
 
 class ToolsFactory:
-    """工具市场管理器"""
+    """工具市场管理器，部分工具按「工具名+参数」缓存结果。"""
     def __init__(self, *tools: BaseTool):
         self._tools: Dict[str, BaseTool] = {tool.name: tool for tool in tools}
+        self._cacheable: Set[str] = set(TOOLS_CACHE_NAME)
+        self._max_cache_size = MAX_CACHE_SIZE
+        self._result_cache: Dict[Tuple[str, str], ToolResult] = {}
 
     def get_tool(self, name: str) -> BaseTool:
         return self._tools.get(name)
@@ -29,7 +41,7 @@ class ToolsFactory:
         return [tool.to_param() for tool in self._tools.values()]
 
     async def execute(self, tool_name: str, tool_params: Dict[str, Any]) -> ToolResult:
-        """执行工具调用"""
+        """执行工具调用。可缓存工具命中缓存时直接返回结果。"""
         try:
             logging.info(f"execute_tool: {tool_name}, params: {tool_params}")
 
@@ -58,9 +70,23 @@ class ToolsFactory:
                     logging.error("Tool(%s) %s", tool_name, msg)
                     return ToolErrorResult(msg)
 
-            # 执行工具调用
-            return await tool.execute(**tool_params)
-                
+            if tool_name in self._cacheable:
+                key = _cache_key(tool_name, tool_params)
+                if key in self._result_cache:
+                    logging.info("execute_tool: %s (cache hit)", tool_name)
+                    return self._result_cache[key]
+
+            result = await tool.execute(**tool_params)
+
+            if tool_name in self._cacheable:
+                key = _cache_key(tool_name, tool_params)
+                if self._max_cache_size and len(self._result_cache) >= self._max_cache_size:
+                    oldest = next(iter(self._result_cache))
+                    del self._result_cache[oldest]
+                self._result_cache[key] = result
+
+            return result
+
         except Exception as e:
             logging.error(f"Tool({tool_name}) execution error: {str(e)}")
-            return ToolErrorResult(f"Tool execution error: {str(e)}") 
+            return ToolErrorResult(f"Tool execution error: {str(e)}")
