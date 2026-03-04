@@ -51,3 +51,13 @@ def dict_to_str(d: Dict[str, Any]) -> str:
 def dict_to_str_by_keys(d: Dict[str, Any], keys: List[str]) -> str:
     """仅取指定 key 列表中的数据，转为一行字符串，格式同 dict_to_str。"""
     return ", ".join(f"{k}: {_format_value(d[k])}" for k in keys if k in d)
+
+
+def dict_list_to_str(lst: List[Dict[str, Any]]) -> str:
+    """将 Dict 列表转为字符串，每个 Dict 一行，格式同 dict_to_str，行间用换行分割。"""
+    return "\n".join(dict_to_str(d) for d in lst if isinstance(d, dict))
+
+
+def dict_list_to_str_by_keys(lst: List[Dict[str, Any]], keys: List[str]) -> str:
+    """将 Dict 列表按指定 key 转为字符串，每个 Dict 一行，行间用换行分割。"""
+    return "\n".join(dict_to_str_by_keys(d, keys) for d in lst if isinstance(d, dict))
